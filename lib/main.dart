@@ -1,17 +1,45 @@
 import 'package:flutter/material.dart';
 
 void main() {
-  runApp(const DebtCalculatorApp());
+  runApp(const MyApp());
 }
 
-class DebtCalculatorApp extends StatelessWidget {
-  const DebtCalculatorApp({Key? key}) : super(key: key);
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      theme: ThemeData.dark(),
-      home: const DebtCalculatorScreen(),
+      title: "Kalkulator Navigacija",
+      initialRoute: "/",
+      routes: {
+        "/": (context) => const HomePage(),
+        "/second": (context) => const DebtCalculatorScreen(),
+        "/result": (context) => const ResultScreen(),
+      },
+    );
+  }
+}
+
+class HomePage extends StatelessWidget {
+  const HomePage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text("Kalkulator otplate duga")),
+      body: Center(
+        child: ElevatedButton(
+          onPressed: () {
+            Navigator.pushNamed(
+              context,
+              "/second",
+              arguments: "Vratite se na naslovnicu",
+            );
+          },
+          child: const Text("Započni"),
+        ),
+      ),
     );
   }
 }
@@ -29,9 +57,6 @@ class _DebtCalculatorScreenState extends State<DebtCalculatorScreen> {
   final TextEditingController _monthlyPaymentController =
       TextEditingController();
 
-  int? _monthsNeeded;
-  String _message = "";
-
   void _calculateMonths() {
     final double debt = double.tryParse(_debtController.text) ?? 0;
     final double annualRate =
@@ -40,9 +65,8 @@ class _DebtCalculatorScreenState extends State<DebtCalculatorScreen> {
         double.tryParse(_monthlyPaymentController.text) ?? 0;
 
     if (debt <= 0 || annualRate <= 0 || monthlyPayment <= 0) {
-      setState(() {
-        _message = "Unesite ispravne vrijednosti!";
-      });
+      Navigator.pushNamed(context, "/result",
+          arguments: "Unesite ispravne vrijednosti!");
       return;
     }
 
@@ -51,10 +75,8 @@ class _DebtCalculatorScreenState extends State<DebtCalculatorScreen> {
     int months = 0;
 
     if (monthlyPayment <= remainingDebt * monthlyRate) {
-      setState(() {
-        _monthsNeeded = null;
-        _message = "Mjesečni doplatak nije dovoljan za pokriće kamata.";
-      });
+      Navigator.pushNamed(context, "/result",
+          arguments: "Mjesečni doplatak nije dovoljan za pokriće kamata.");
       return;
     }
 
@@ -63,10 +85,8 @@ class _DebtCalculatorScreenState extends State<DebtCalculatorScreen> {
       months += 1;
     }
 
-    setState(() {
-      _monthsNeeded = months;
-      _message = "Broj meseci potrebnih za isplatu duga: $_monthsNeeded";
-    });
+    Navigator.pushNamed(context, "/result",
+        arguments: "Broj mjeseci potrebnih za isplatu duga: $months");
   }
 
   @override
@@ -104,11 +124,49 @@ class _DebtCalculatorScreenState extends State<DebtCalculatorScreen> {
               onPressed: _calculateMonths,
               child: const Text("Izračunaj mjesece"),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(
+              height: 20,
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pushNamed(context, "/");
+              },
+              child: const Text("Povratak na početnu stranicu"),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class ResultScreen extends StatelessWidget {
+  const ResultScreen({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    final String message =
+        ModalRoute.of(context)?.settings.arguments as String? ?? "";
+
+    return Scaffold(
+      appBar: AppBar(title: const Text("Rezultat")),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
             Text(
-              _message,
-              style: const TextStyle(fontSize: 16),
+              message,
+              style: const TextStyle(fontSize: 18),
               textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pushNamed(context, "/second");
+              },
+              child: const Text("Povratak na unos vrijednosti"),
             ),
           ],
         ),

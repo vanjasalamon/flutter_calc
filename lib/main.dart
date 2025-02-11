@@ -52,23 +52,20 @@ class DebtCalculatorScreen extends StatefulWidget {
 }
 
 class _DebtCalculatorScreenState extends State<DebtCalculatorScreen> {
+  final _formKey = GlobalKey<FormState>();
   final TextEditingController _debtController = TextEditingController();
   final TextEditingController _interestRateController = TextEditingController();
   final TextEditingController _monthlyPaymentController =
       TextEditingController();
 
   void _calculateMonths() {
-    final double debt = double.tryParse(_debtController.text) ?? 0;
-    final double annualRate =
-        double.tryParse(_interestRateController.text) ?? 0;
-    final double monthlyPayment =
-        double.tryParse(_monthlyPaymentController.text) ?? 0;
-
-    if (debt <= 0 || annualRate <= 0 || monthlyPayment <= 0) {
-      Navigator.pushNamed(context, "/result",
-          arguments: "Unesite ispravne vrijednosti!");
+    if (!_formKey.currentState!.validate()) {
       return;
     }
+
+    final double debt = double.parse(_debtController.text);
+    final double annualRate = double.parse(_interestRateController.text);
+    final double monthlyPayment = double.parse(_monthlyPaymentController.text);
 
     final double monthlyRate = (annualRate / 100) / 12;
     double remainingDebt = debt;
@@ -95,45 +92,73 @@ class _DebtCalculatorScreenState extends State<DebtCalculatorScreen> {
       appBar: AppBar(title: const Text("Kalkulator otplate duga")),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            TextField(
-              controller: _debtController,
-              decoration: const InputDecoration(
-                labelText: "Iznos duga (EUR)",
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextFormField(
+                controller: _debtController,
+                decoration:
+                    const InputDecoration(labelText: "Iznos duga (EUR)"),
+                keyboardType: TextInputType.number,
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return "Molimo unesite iznos duga.";
+                  }
+                  if (double.tryParse(value) == null ||
+                      double.parse(value) <= 0) {
+                    return "Unesite ispravnu vrijednost.";
+                  }
+                  return null;
+                },
               ),
-              keyboardType: TextInputType.number,
-            ),
-            TextField(
-              controller: _interestRateController,
-              decoration: const InputDecoration(
-                labelText: "Godišnja kamatna stopa (%)",
+              TextFormField(
+                controller: _interestRateController,
+                decoration: const InputDecoration(
+                    labelText: "Godišnja kamatna stopa (%)"),
+                keyboardType: TextInputType.number,
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return "Molimo unesite godišnju kamatnu stopu.";
+                  }
+                  if (double.tryParse(value) == null ||
+                      double.parse(value) <= 0) {
+                    return "Unesite ispravnu pozitivnu vrijednost.";
+                  }
+                  return null;
+                },
               ),
-              keyboardType: TextInputType.number,
-            ),
-            TextField(
-              controller: _monthlyPaymentController,
-              decoration: const InputDecoration(
-                labelText: "Mjesečni doplatak (EUR)",
+              TextFormField(
+                controller: _monthlyPaymentController,
+                decoration:
+                    const InputDecoration(labelText: "Mjesečni doplatak (EUR)"),
+                keyboardType: TextInputType.number,
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return "Molimo unesite mjesečni doplatak.";
+                  }
+                  if (double.tryParse(value) == null ||
+                      double.parse(value) <= 0) {
+                    return "Unesite ispravnu pozitivnu vrijednost.";
+                  }
+                  return null;
+                },
               ),
-              keyboardType: TextInputType.number,
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: _calculateMonths,
-              child: const Text("Izračunaj mjesece"),
-            ),
-            const SizedBox(
-              height: 20,
-            ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pushNamed(context, "/");
-              },
-              child: const Text("Povratak na početnu stranicu"),
-            ),
-          ],
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: _calculateMonths,
+                child: const Text("Izračunaj mjesece"),
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pushNamed(context, "/");
+                },
+                child: const Text("Povratak na početnu stranicu"),
+              ),
+            ],
+          ),
         ),
       ),
     );

@@ -1,197 +1,198 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:sqflite/sqflite.dart';
+import 'package:path/path.dart';
 
-void main() {
-  runApp(const MyApp());
-}
+void main() => runApp(const DugApp());
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class DugApp extends StatelessWidget {
+  const DugApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: "Kalkulator Navigacija",
-      initialRoute: "/",
-      routes: {
-        "/": (context) => const HomePage(),
-        "/second": (context) => const DebtCalculatorScreen(),
-        "/result": (context) => const ResultScreen(),
-      },
-    );
-  }
-}
-
-class HomePage extends StatelessWidget {
-  const HomePage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text("Kalkulator otplate duga")),
-      body: Center(
-        child: ElevatedButton(
-          onPressed: () {
-            Navigator.pushNamed(
-              context,
-              "/second",
-              arguments: "Vratite se na naslovnicu",
-            );
-          },
-          child: const Text("Započni"),
+      debugShowCheckedModeBanner: false,
+      title: 'Otplata Duga',
+      theme: ThemeData(
+        primarySwatch: Colors.teal,
+        scaffoldBackgroundColor: const Color(0xFFF5F5F5),
+        textTheme: const TextTheme(
+          bodyMedium: TextStyle(fontSize: 16),
         ),
       ),
+      home: const DugScreen(),
     );
   }
 }
 
-class DebtCalculatorScreen extends StatefulWidget {
-  const DebtCalculatorScreen({Key? key}) : super(key: key);
+class DugScreen extends StatefulWidget {
+  const DugScreen({super.key});
 
   @override
-  _DebtCalculatorScreenState createState() => _DebtCalculatorScreenState();
+  State<DugScreen> createState() => _DugScreenState();
 }
 
-class _DebtCalculatorScreenState extends State<DebtCalculatorScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final TextEditingController _debtController = TextEditingController();
-  final TextEditingController _interestRateController = TextEditingController();
-  final TextEditingController _monthlyPaymentController =
+class _DugScreenState extends State<DugScreen> {
+  final TextEditingController _dugController = TextEditingController();
+  final TextEditingController _kamatnaStopaController = TextEditingController();
+  final TextEditingController _mjesecniDoprinosController =
       TextEditingController();
 
-  void _calculateMonths() {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
-
-    final double debt = double.parse(_debtController.text);
-    final double annualRate = double.parse(_interestRateController.text);
-    final double monthlyPayment = double.parse(_monthlyPaymentController.text);
-
-    final double monthlyRate = (annualRate / 100) / 12;
-    double remainingDebt = debt;
-    int months = 0;
-
-    if (monthlyPayment <= remainingDebt * monthlyRate) {
-      Navigator.pushNamed(context, "/result",
-          arguments: "Mjesečni doplatak nije dovoljan za pokriće kamata.");
-      return;
-    }
-
-    while (remainingDebt > 0) {
-      remainingDebt = remainingDebt * (1 + monthlyRate) - monthlyPayment;
-      months += 1;
-    }
-
-    Navigator.pushNamed(context, "/result",
-        arguments: "Broj mjeseci potrebnih za isplatu duga: $months");
-  }
+  double? _rezultat;
+  final List<Map<String, dynamic>> _povijest = [];
+  Database? _db;
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text("Kalkulator otplate duga")),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              TextFormField(
-                controller: _debtController,
-                decoration:
-                    const InputDecoration(labelText: "Iznos duga (EUR)"),
-                keyboardType: TextInputType.number,
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return "Molimo unesite iznos duga.";
-                  }
-                  if (double.tryParse(value) == null ||
-                      double.parse(value) <= 0) {
-                    return "Unesite ispravnu vrijednost.";
-                  }
-                  return null;
-                },
-              ),
-              TextFormField(
-                controller: _interestRateController,
-                decoration: const InputDecoration(
-                    labelText: "Godišnja kamatna stopa (%)"),
-                keyboardType: TextInputType.number,
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return "Molimo unesite godišnju kamatnu stopu.";
-                  }
-                  if (double.tryParse(value) == null ||
-                      double.parse(value) <= 0) {
-                    return "Unesite ispravnu pozitivnu vrijednost.";
-                  }
-                  return null;
-                },
-              ),
-              TextFormField(
-                controller: _monthlyPaymentController,
-                decoration:
-                    const InputDecoration(labelText: "Mjesečni doplatak (EUR)"),
-                keyboardType: TextInputType.number,
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return "Molimo unesite mjesečni doplatak.";
-                  }
-                  if (double.tryParse(value) == null ||
-                      double.parse(value) <= 0) {
-                    return "Unesite ispravnu pozitivnu vrijednost.";
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: _calculateMonths,
-                child: const Text("Izračunaj mjesece"),
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pushNamed(context, "/");
-                },
-                child: const Text("Povratak na početnu stranicu"),
-              ),
-            ],
-          ),
+  void initState() {
+    super.initState();
+    _initDB();
+  }
+
+  Future<void> _initDB() async {
+    _db = await openDatabase(
+      join(await getDatabasesPath(), 'dug.db'),
+      onCreate: (db, version) {
+        return db.execute(
+          'CREATE TABLE povijest(id INTEGER PRIMARY KEY, dug REAL, kamatna_stopa REAL, doprinos REAL, mjeseci INTEGER, datum TEXT)',
+        );
+      },
+      version: 1,
+    );
+    await _ucitajPovijest();
+  }
+
+  Future<void> _ucitajPovijest() async {
+    final data = await _db?.query('povijest', orderBy: 'id DESC');
+    setState(() {
+      _povijest.clear();
+      _povijest.addAll(data ?? []);
+    });
+  }
+
+  Future<void> _izracunajOtplatu() async {
+    final dug = double.tryParse(_dugController.text) ?? 0;
+    final kamata = double.tryParse(_kamatnaStopaController.text) ?? 0;
+    final doprinos = double.tryParse(_mjesecniDoprinosController.text) ?? 0;
+
+    if (dug <= 0 || doprinos <= 0) {
+      _prikaziPoruku('Unesite valjane iznose duga i doprinosa.');
+      return;
+    }
+
+    int mjeseci = 0;
+    double trenutniDug = dug;
+    while (trenutniDug > 0) {
+      trenutniDug += trenutniDug * (kamata / 100 / 12);
+      trenutniDug -= doprinos;
+      mjeseci++;
+      if (mjeseci > 1000) break;
+    }
+
+    final datum = DateFormat('dd.MM.yyyy HH:mm').format(DateTime.now());
+
+    await _db?.insert('povijest', {
+      'dug': dug,
+      'kamatna_stopa': kamata,
+      'doprinos': doprinos,
+      'mjeseci': mjeseci,
+      'datum': datum,
+    });
+
+    setState(() {
+      _rezultat = mjeseci.toDouble();
+      _povijest.insert(0, {
+        'dug': dug,
+        'kamatna_stopa': kamata,
+        'doprinos': doprinos,
+        'mjeseci': mjeseci,
+        'datum': datum,
+      });
+    });
+
+    Navigator.of(context as BuildContext).push(
+      MaterialPageRoute(
+        builder: (context) => RezultatScreen(
+          dug: dug,
+          kamata: kamata,
+          doprinos: doprinos,
+          mjeseci: mjeseci,
+          datum: datum,
         ),
       ),
     );
-  }
-}
 
-class ResultScreen extends StatelessWidget {
-  const ResultScreen({Key? key}) : super(key: key);
+    _dugController.clear();
+    _kamatnaStopaController.clear();
+    _mjesecniDoprinosController.clear();
+  }
+
+  void _prikaziPoruku(String poruka) {
+    ScaffoldMessenger.of(context as BuildContext).showSnackBar(
+      SnackBar(content: Text(poruka), backgroundColor: Colors.redAccent),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final String message =
-        ModalRoute.of(context)?.settings.arguments as String? ?? "";
-
     return Scaffold(
-      appBar: AppBar(title: const Text("Rezultat")),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
+      appBar: AppBar(title: const Text('Otplata Duga')),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              message,
-              style: const TextStyle(fontSize: 18),
-              textAlign: TextAlign.center,
+            TextField(
+              controller: _dugController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Ukupan dug (EUR)',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.attach_money),
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _kamatnaStopaController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Kamatna stopa (%)',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.percent),
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _mjesecniDoprinosController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Mjesečni doprinos (EUR)',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.payments),
+              ),
             ),
             const SizedBox(height: 20),
-            ElevatedButton(
+            ElevatedButton.icon(
+              onPressed: _izracunajOtplatu,
+              icon: const Icon(Icons.calculate),
+              label: const Text('Izračunaj otplatu'),
+            ),
+            const SizedBox(height: 10),
+            if (_rezultat != null)
+              Text(
+                'Potrebno mjeseci: ${_rezultat!.toInt()}',
+                style:
+                    const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
               onPressed: () {
-                Navigator.pushNamed(context, "/second");
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => PovijestScreen(povijest: _povijest),
+                  ),
+                );
               },
-              child: const Text("Povratak na unos vrijednosti"),
+              icon: const Icon(Icons.history),
+              label: const Text('Povijest izračuna'),
             ),
           ],
         ),
@@ -199,3 +200,82 @@ class ResultScreen extends StatelessWidget {
     );
   }
 }
+
+class RezultatScreen extends StatelessWidget {
+  final double dug;
+  final double kamata;
+  final double doprinos;
+  final int mjeseci;
+  final String datum;
+
+  const RezultatScreen({
+    super.key,
+    required this.dug,
+    required this.kamata,
+    required this.doprinos,
+    required this.mjeseci,
+    required this.datum,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Rezultat otplate')),
+      body: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Dug: €$dug'),
+            Text('Kamatna stopa: $kamata%'),
+            Text('Mjesečni doprinos: €$doprinos'),
+            const SizedBox(height: 10),
+            Text('Potrebno mjeseci za otplatu: $mjeseci',
+                style:
+                    const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            const Spacer(),
+            Center(
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Natrag'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class PovijestScreen extends StatelessWidget {
+  final List<Map<String, dynamic>> povijest;
+
+  const PovijestScreen({super.key, required this.povijest});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Povijest izračuna')),
+      body: ListView.builder(
+        itemCount: povijest.length,
+        itemBuilder: (context, index) {
+          final zapis = povijest[index];
+          return Card(
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: ListTile(
+              leading: const Icon(Icons.timeline),
+              title: Text(
+                'Mjeseci: ${zapis['mjeseci']}',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              subtitle: Text(
+                'Dug: €${zapis['dug']}\nKamatna stopa: ${zapis['kamatna_stopa']}%\nDoprinos: €${zapis['doprinos']}\n${zapis['datum']}',
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
